@@ -1,9 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../SupabaseClient";
 
 export default function ChatWindow({ user, selectedUser }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const messagesEndRef = useRef(null); // ✅ reference to last message
+
+  // Auto-scroll to bottom
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   // Fetch chat messages between logged-in user and selectedUser
   useEffect(() => {
@@ -48,6 +54,11 @@ export default function ChatWindow({ user, selectedUser }) {
       supabase.removeChannel(channel);
     };
   }, [selectedUser, user.id]);
+
+  // Scroll every time messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const sendMessage = async () => {
     if (!text.trim()) return;
@@ -99,6 +110,8 @@ export default function ChatWindow({ user, selectedUser }) {
             </div>
           </div>
         ))}
+        {/* Invisible anchor for scrolling */}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
