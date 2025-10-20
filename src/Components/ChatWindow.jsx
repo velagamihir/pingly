@@ -4,14 +4,14 @@ import { supabase } from "../SupabaseClient";
 export default function ChatWindow({ user, selectedUser }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
-  const messagesEndRef = useRef(null); // ✅ reference to last message
+  const [error, setError] = useState(""); // ✅ error state
+  const messagesEndRef = useRef(null);
 
-  // Auto-scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Fetch chat messages between logged-in user and selectedUser
+  // Fetch messages
   useEffect(() => {
     if (!selectedUser) return;
 
@@ -55,22 +55,32 @@ export default function ChatWindow({ user, selectedUser }) {
     };
   }, [selectedUser, user.id]);
 
-  // Scroll every time messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!text.trim()) return;
-    const { error } = await supabase.from("messages").insert([
+    if (!text.trim()) {
+      setError("Message cannot be empty!"); // show error
+      return;
+    }
+
+    setError(""); // clear previous errors
+
+    const { error: insertError } = await supabase.from("messages").insert([
       {
         sender_id: user.id,
         receiver_id: selectedUser.id,
         content: text,
       },
     ]);
-    if (error) console.error(error);
-    else setText("");
+
+    if (insertError) {
+      console.error(insertError);
+      setError("Failed to send message!");
+    } else {
+      setText(""); // clear input
+    }
   };
 
   if (!selectedUser) {
@@ -110,26 +120,30 @@ export default function ChatWindow({ user, selectedUser }) {
             </div>
           </div>
         ))}
-        {/* Invisible anchor for scrolling */}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="p-3 bg-white border-t flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          className="flex-1 border p-2 rounded focus:ring-2 focus:ring-blue-400"
-        />
-        <button
-          onClick={sendMessage}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Send
-        </button>
+      <div className="p-3 bg-white border-t flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Type a message..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            className="flex-1 border p-2 rounded focus:ring-2 focus:ring-blue-400"
+          />
+          <button
+            onClick={sendMessage}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Send
+          </button>
+        </div>
+        {error && (
+          <p className="text-red-500 text-sm">{error}</p> // show error below input
+        )}
       </div>
     </div>
   );

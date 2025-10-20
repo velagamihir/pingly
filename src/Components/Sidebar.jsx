@@ -133,13 +133,6 @@ export default function Sidebar({ user, onSelectUser }) {
           <h2 className="text-xl sm:text-2xl font-bold text-blue-600">
             Pingly 💬
           </h2>
-          {/* Close button inside sidebar (mobile only) */}
-          <button
-            className="sm:hidden text-gray-500 dark:text-gray-300"
-            onClick={() => setIsOpen(false)}
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Current user */}
