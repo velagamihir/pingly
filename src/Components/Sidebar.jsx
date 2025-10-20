@@ -12,13 +12,13 @@ export default function Sidebar({ user, onSelectUser }) {
       .from("messages")
       .select(
         `
-      sender_id,
-      receiver_id,
-      last_message,
-      updated_at,
-      sender:profiles!messages_sender_id_fkey (id, username, email),
-      receiver:profiles!messages_receiver_id_fkey (id, username, email)
-    `
+        sender_id,
+        receiver_id,
+        last_message,
+        updated_at,
+        sender:profiles!messages_sender_id_fkey (id, username, email),
+        receiver:profiles!messages_receiver_id_fkey (id, username, email)
+      `
       )
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order("updated_at", { ascending: false });
@@ -28,7 +28,6 @@ export default function Sidebar({ user, onSelectUser }) {
       return;
     }
 
-    // Filter distinct other users
     const chats = [];
     const addedIds = new Set();
 
@@ -37,10 +36,6 @@ export default function Sidebar({ user, onSelectUser }) {
       const otherUserId = isCurrentUserSender ? c.receiver_id : c.sender_id;
       const profile = isCurrentUserSender ? c.receiver : c.sender;
 
-      // Only add if:
-      // 1. We have a valid other user ID
-      // 2. The other user is NOT the current user (safety check)
-      // 3. We haven't already added this user
       if (
         otherUserId &&
         otherUserId !== user.id &&
@@ -60,46 +55,29 @@ export default function Sidebar({ user, onSelectUser }) {
     setRecentChats(chats);
   };
 
-  // Initial fetch + real-time subscription
   useEffect(() => {
     fetchRecentChats();
 
-    // Subscribe to real-time changes in messages table
     const channel = supabase
       .channel("messages-changes")
       .on(
         "postgres_changes",
-        {
-          event: "*", // Listen to INSERT, UPDATE, DELETE
-          schema: "public",
-          table: "messages",
-          filter: `sender_id=eq.${user.id}`, // Messages sent by current user
-        },
-        () => {
-          fetchRecentChats(); // Refresh when current user sends a message
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "messages",
-          filter: `receiver_id=eq.${user.id}`, // Messages received by current user
-        },
-        () => {
-          fetchRecentChats(); // Refresh when current user receives a message
+        { event: "*", schema: "public", table: "messages" },
+        (payload) => {
+          if (
+            payload.new?.sender_id === user.id ||
+            payload.new?.receiver_id === user.id
+          ) {
+            fetchRecentChats();
+          }
         }
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [user.id]);
 
-  // Search for users not in recent chats
+  // Search users
   useEffect(() => {
     if (!search) {
       setSearchResults([]);
@@ -111,8 +89,8 @@ export default function Sidebar({ user, onSelectUser }) {
       const { data, error } = await supabase
         .from("profiles")
         .select("id, username, email")
-        .neq("id", user.id) // exclude logged-in user
-        .not("id", "in", `(${recentIds.join(",")})`)
+        .neq("id", user.id)
+        .not("id", "in", `(${recentIds.join(",") || "0"})`)
         .ilike("username", `%${search}%`);
 
       if (error) console.error(error);
@@ -125,42 +103,94 @@ export default function Sidebar({ user, onSelectUser }) {
   const displayUsers = search ? searchResults : recentChats;
 
   return (
-    <div className="w-80 bg-white shadow-md p-4 flex flex-col">
-      <h2 className="text-2xl font-bold text-blue-600 mb-4">Pingly 💬</h2>
-      <h2 className="text-sm text-gray-700 mb-4">{user.email}</h2>
+    <div
+      className="
+        w-full sm:w-80 
+        flex flex-col 
+        bg-white 
+        dark:bg-gray-900 
+        shadow-md 
+        p-3 sm:p-4 
+        border-r border-gray-200 
+        dark:border-gray-700 
+        h-[100vh] 
+        max-h-screen
+      "
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-blue-600">
+          Pingly 💬
+        </h2>
+      </div>
+
+      {/* Current user */}
+      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-3 truncate">
+        {user.email}
+      </p>
 
       {/* Search bar */}
-      <input
-        type="text"
-        placeholder="Search users..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="border p-2 rounded mb-4 focus:ring-2 focus:ring-blue-400"
-      />
+      <div className="relative mb-3">
+        <input
+          type="text"
+          placeholder="Search users..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="
+            w-full 
+            border border-gray-300 dark:border-gray-700 
+            bg-gray-50 dark:bg-gray-800 
+            text-sm sm:text-base 
+            text-gray-800 dark:text-gray-200 
+            p-2 rounded-xl 
+            focus:ring-2 focus:ring-blue-400 
+            transition-all duration-200
+          "
+        />
+      </div>
 
-      <h3 className="text-gray-600 text-sm mb-2">
+      {/* Section title */}
+      <h3 className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm mb-2 uppercase tracking-wide">
         {search ? "Search Results" : "Recent Chats"}
       </h3>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* Users list */}
+      <div
+        className="
+          flex-1 overflow-y-auto 
+          scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-transparent
+        "
+      >
         {displayUsers.length > 0 ? (
           displayUsers.map((u) => (
             <div
               key={u.id}
               onClick={() => onSelectUser(u)}
-              className="p-2 hover:bg-blue-50 rounded cursor-pointer"
+              className="
+                p-2 sm:p-3 
+                mb-1 
+                rounded-xl 
+                cursor-pointer 
+                transition-colors 
+                hover:bg-blue-50 dark:hover:bg-gray-800
+                group
+              "
             >
-              <p className="font-semibold">{u.username}</p>
-              <p className="text-xs text-gray-500">{u.email}</p>
+              <p className="font-semibold text-sm sm:text-base text-gray-800 dark:text-gray-100 group-hover:text-blue-600">
+                {u.username}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {u.email}
+              </p>
               {!search && u.last_message && (
-                <p className="text-xs text-gray-400 truncate">
+                <p className="text-xs text-gray-400 truncate italic">
                   {u.last_message}
                 </p>
               )}
             </div>
           ))
         ) : (
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-500 dark:text-gray-400 text-sm text-center mt-4">
             {search ? "No users found." : "No recent chats."}
           </p>
         )}
